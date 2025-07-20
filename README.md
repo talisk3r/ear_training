@@ -40,5 +40,21 @@ Improvement
 * out of time is ?
 * Random Tonality,
 * Random Cadence Type
-* keyboard inpu.
+* keyboard input without chat
+* piano keyboar input
+
+🧠 Notes:
+If pygame is slow in your container, consider using simpleaudio or playsound.
+
+Timing/timeout is approximate due to Streamlit's rerun nature — this is a best-effort 3-second window.
+
+Session restarts only after summary is acknowledged.
+
+
+✅ Next Steps (optional):
+🎹 I can make a real graphical piano with click zones using st_click_detector and an SVG/PNG image.
+
+📈 Add session history charts.
+
+🗂 Let user name themselves and keep personalized score history.
 
