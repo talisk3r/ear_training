@@ -44,6 +44,7 @@ def play_sound(filename):
     # st.error(f"Missing audio file: {filename}")
 
 
+# what about
 # === Init session state ===
 st.set_page_config("Pitch Trainer", layout="wide")
 
@@ -55,6 +56,7 @@ if "session_active" not in st.session_state:
     st.session_state.start_time = None
     st.session_state.next_round_trigger = False
     st.session_state.enabled_notes = NOTE_NAMES.copy()
+    st.session_state.to_rerun = False
 
 # === Sidebar controls ===
 st.sidebar.title("🎵 Pitch Trainer Settings")
@@ -89,7 +91,7 @@ if st.sidebar.button("🎯 Start Session", disabled=st.session_state.session_act
         st.session_state.rounds = []
         st.session_state.round_index = 0
         st.session_state.next_round_trigger = True
-        st.experimental_rerun()
+        st.session_state.to_rerun = True
 
 # === App title ===
 st.title("🎶 Pitch Recognition Trainer")
@@ -112,7 +114,7 @@ if st.session_state.session_active:
             st.session_state.session_active = False
             st.session_state.round_index = 0
             st.session_state.rounds = []
-            st.experimental_rerun()
+            st.session_state.to_rerun = True
     else:
         round_num = st.session_state.round_index + 1
         st.subheader(f"🎧 Round {round_num} of {ROUNDS_PER_SESSION}")
@@ -130,32 +132,38 @@ if st.session_state.session_active:
             time.sleep(0.5)
             st.audio(note_file)
             st.session_state.next_round_trigger = False
-            st.experimental_rerun()
+            st.session_state.to_rerun = True
 
-        # Check if timeout expired
-        elapsed = time.time() - st.session_state.start_time
-        timeout = elapsed > 3
+        else:
+            # Check if timeout expired
+            elapsed = time.time() - st.session_state.start_time
+            timeout = elapsed > 3
 
-        guess = st.text_input("Which note did you hear?",
-                              key=f"guess_{round_num}")
-        submitted = st.button("Submit Guess")
+            guess = st.text_input("Which note did you hear?",
+                                  key=f"guess_{round_num}")
+            submitted = st.button("Submit Guess")
 
-        if timeout or submitted:
-            final_guess = guess.strip().upper() if guess and not timeout else "?"
-            correct = final_guess == st.session_state.current_note
-            st.session_state.rounds.append({
-                "guess": final_guess,
-                "target": st.session_state.current_note,
-                "correct": correct,
-                "time": elapsed
-            })
+            if timeout or submitted:
+                final_guess = guess.strip().upper() if guess and not timeout else "?"
+                correct = final_guess == st.session_state.current_note
+                st.session_state.rounds.append({
+                    "guess": final_guess,
+                    "target": st.session_state.current_note,
+                    "correct": correct,
+                    "time": elapsed
+                })
 
-            feedback = "✅ Correct!" if correct else f"❌ Wrong! It was {st.session_state.current_note}" if final_guess != "?" else "⏱️ Timed out!"
-            st.write(feedback)
+                feedback = "✅ Correct!" if correct else f"❌ Wrong! It was {st.session_state.current_note}" if final_guess != "?" else "⏱️ Timed out!"
+                st.write(feedback)
 
-            st.session_state.round_index += 1
-            st.session_state.next_round_trigger = True
-            time.sleep(1.5)
-            st.experimental_rerun()
+                st.session_state.round_index += 1
+                st.session_state.next_round_trigger = True
+                time.sleep(1.5)
+                st.session_state.to_rerun = True
 else:
     st.info("Click **Start Session** to begin 20 rounds of pitch guessing.")
+
+# === Final rerun if needed ===
+if st.session_state.get("to_rerun"):
+    st.session_state.to_rerun = False
+    st.experimental_rerun()
