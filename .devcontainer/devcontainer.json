@@ -3,11 +3,11 @@
   "build": {
     "dockerfile": "Dockerfile"
   },
-  "settings": {
-    "terminal.integrated.defaultProfile.linux": "bash"
-  },
   "postCreateCommand": "pip install -r requirements.txt || true",
   "customizations": {
+    "settings": {
+      "terminal.integrated.defaultProfile.linux": "bash"
+    },
     "vscode": {
       "extensions": [
         "ms-python.python",
@@ -30,3 +30,4 @@
       "onAutoForward": "openPreview"
     }
   }
+}

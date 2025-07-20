@@ -1,2 +1,2 @@
-streamlit       ==    1.40.1
-pygame          ==2.5.2
+streamlit
+pygame
