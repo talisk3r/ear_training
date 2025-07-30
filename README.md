@@ -44,8 +44,6 @@ Improvement
 * piano keyboar input
 
 🧠 Notes:
-If pygame is slow in your container, consider using simpleaudio or playsound.
-
 Timing/timeout is approximate due to Streamlit's rerun nature — this is a best-effort 3-second window.
 
 Session restarts only after summary is acknowledged.

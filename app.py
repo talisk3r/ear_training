@@ -1,25 +1,61 @@
+# Usage
+# streamlit run app.py
+
+import io
+import soundfile as sf
+import numpy as np
 import streamlit as st
 import random
 import time
 import os
 import json
 import datetime
-import pygame
+
 
 # === Constants ===
 TONALITIES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
 CADENCES = ['I-IV-V-I', 'I-V-I', 'II-V-I']
-NOTE_NAMES = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B']
+NOTE_NAMES = ['C4', 'C#4', 'D4', 'Eb4', 'E4',
+              'F4', 'F#4', 'G4', 'Ab4', 'A4', 'Bb4', 'B4']
 AUDIO_DIR = 'audio'
 ROUNDS_PER_SESSION = 20
 SESSION_LOG = 'session_data.json'
 
-# === Init Pygame mixer ===
-# pygame.mixer.init()
+# === Tone generaton ===
+SAMPLE_RATE = 44100
+DURATION = 0.2  # seconds
+
+NOTE_FREQS = {
+    'C4': 261.63,
+    'C#4': 277.18,
+    'D4': 293.66,
+    'Eb4': 311.13,
+    'E4': 329.63,
+    'F4': 349.23,
+    'F#4': 369.99,
+    'G4': 392.00,
+    'Ab4': 415.30,
+    'A4': 440.00,
+    'Bb4': 466.16,
+    'B4': 493.88,
+}
+
+
+def generate_tone(note_name, duration=DURATION, sample_rate=SAMPLE_RATE):
+    freq = NOTE_FREQS[note_name]
+    t = np.linspace(0, duration, int(sample_rate * duration), False)
+    tone = 0.5 * np.sin(2 * np.pi * freq * t)
+    return tone.astype(np.float32)
+
+
+def note_to_wav(note_name):
+    audio_data = generate_tone(note_name)
+    buffer = io.BytesIO()
+    sf.write(buffer, audio_data, SAMPLE_RATE, format='WAV')
+    return buffer.getvalue()
+
 
 # === Load/save sessions ===
-
-
 def load_session_data():
     if os.path.exists(SESSION_LOG):
         with open(SESSION_LOG, 'r') as f:
@@ -31,22 +67,29 @@ def save_session_data(data):
     with open(SESSION_LOG, 'w') as f:
         json.dump(data, f, indent=2)
 
+
 # === Play WAV file ===
-
-
 def play_sound(filename):
-    # if os.path.exists(filename):
-    # pygame.mixer.music.load(filename)
-    # pygame.mixer.music.play()
-    # while pygame.mixer.music.get_busy():
-    time.sleep(0.1)
-    # else:
-    # st.error(f"Missing audio file: {filename}")
+    if os.path.exists(filename):
+        st.audio(filename, format="audio/wav")
+    else:
+        st.error(f"Missing audio file: {filename}")
 
 
-# what about
 # === Init session state ===
 st.set_page_config("Pitch Trainer", layout="wide")
+
+# === Sidebar controls ===
+st.sidebar.title("🎵 Pitch Trainer Settings")
+
+tonality = st.sidebar.multiselect("Tonality", TONALITIES, default=['C'])
+
+cadence_types = st.sidebar.multiselect(
+    "Cadence types", CADENCES, default=["I-V-I"])
+
+selected_notes = st.sidebar.multiselect(
+    "Cadence types", NOTE_NAMES, default=['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'])
+
 
 if "session_active" not in st.session_state:
     st.session_state.session_active = False
@@ -55,15 +98,9 @@ if "session_active" not in st.session_state:
     st.session_state.current_note = None
     st.session_state.start_time = None
     st.session_state.next_round_trigger = False
-    st.session_state.enabled_notes = NOTE_NAMES.copy()
+    st.session_state.enabled_notes = selected_notes
     st.session_state.to_rerun = False
 
-# === Sidebar controls ===
-st.sidebar.title("🎵 Pitch Trainer Settings")
-
-tonality = st.sidebar.selectbox("Tonality", TONALITIES, index=0)
-cadence_types = st.sidebar.multiselect(
-    "Cadence types", CADENCES, default=["I-IV-V-I", "I-V-I"])
 
 # Piano-style keyboard note selection
 st.sidebar.markdown("### Select Notes to Guess")
@@ -86,6 +123,8 @@ if st.sidebar.button("🎯 Start Session", disabled=st.session_state.session_act
         st.sidebar.error("Select at least one note.")
     elif not cadence_types:
         st.sidebar.error("Select at least one cadence.")
+    elif not tonality:
+        st.sidebar.error("Select at least one tonality.")
     else:
         st.session_state.session_active = True
         st.session_state.rounds = []
@@ -121,16 +160,19 @@ if st.session_state.session_active:
 
         if st.session_state.next_round_trigger:
             chosen_cadence = random.choice(cadence_types)
-            cadence_file = f"{AUDIO_DIR}/{chosen_cadence}_{tonality}.wav"
+            chosen_tonality = random.choice(tonality)
+            cadence_file = f"{AUDIO_DIR}/{chosen_cadence}_{chosen_tonality}.wav"
             note = random.choice(st.session_state.enabled_notes)
-            note_file = f"{AUDIO_DIR}/{note}.wav"
+            note_audio = note_to_wav(note)
+
             st.session_state.current_note = note
             st.session_state.start_time = time.time()
 
             with st.spinner(f"Playing cadence `{chosen_cadence}` in `{tonality}`..."):
                 play_sound(cadence_file)
-            time.sleep(0.5)
-            st.audio(note_file)
+
+            time.sleep(0.2)
+            st.audio(note_audio, format="audio/wav")
             st.session_state.next_round_trigger = False
             st.session_state.to_rerun = True
 
@@ -166,4 +208,4 @@ else:
 # === Final rerun if needed ===
 if st.session_state.get("to_rerun"):
     st.session_state.to_rerun = False
-    st.experimental_rerun()
+    # st.experimental_rerun()
