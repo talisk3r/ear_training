@@ -18,7 +18,7 @@ CADENCES = ['I-IV-V-I', 'I-V-I', 'II-V-I']
 NOTE_NAMES = ['C4', 'C#4', 'D4', 'Eb4', 'E4',
               'F4', 'F#4', 'G4', 'Ab4', 'A4', 'Bb4', 'B4']
 AUDIO_DIR = 'audio'
-ROUNDS_PER_SESSION = 20
+ROUNDS_PER_SESSION = 3
 SESSION_LOG = 'session_data.json'
 
 # === Tone generaton ===
@@ -69,7 +69,7 @@ def save_session_data(data):
 
 
 # === Play WAV file ===
-def play_sound(filename):
+def play_wave_file(filename):
     if os.path.exists(filename):
         st.audio(filename, format="audio/wav")
     else:
@@ -88,7 +88,7 @@ cadence_types = st.sidebar.multiselect(
     "Cadence types", CADENCES, default=["I-V-I"])
 
 selected_notes = st.sidebar.multiselect(
-    "Cadence types", NOTE_NAMES, default=['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'])
+    "Enabled notes", NOTE_NAMES, default=['C4', 'D4', 'E4', 'F4', 'G4', 'A4', 'B4'])
 
 
 if "session_active" not in st.session_state:
@@ -98,28 +98,21 @@ if "session_active" not in st.session_state:
     st.session_state.current_note = None
     st.session_state.start_time = None
     st.session_state.next_round_trigger = False
-    st.session_state.enabled_notes = selected_notes
-    st.session_state.to_rerun = False
+    st.session_state.submitted = None
 
 
 # Piano-style keyboard note selection
-st.sidebar.markdown("### Select Notes to Guess")
+st.sidebar.markdown("### Your input - Which note do you hear?")
 cols = st.sidebar.columns(len(NOTE_NAMES))
-enabled_set = set(st.session_state.enabled_notes)
 
 for i, note in enumerate(NOTE_NAMES):
-    label = f"{'✅' if note in enabled_set else '❌'} {note}"
-    if cols[i].button(label, key=f"note_{note}"):
-        if note in enabled_set:
-            enabled_set.remove(note)
-        else:
-            enabled_set.add(note)
+    if cols[i].button(note, key=f"note_{note}"):
+        st.session_state.submitted = note
 
-st.session_state.enabled_notes = sorted(enabled_set)
 
 # Start session button
 if st.sidebar.button("🎯 Start Session", disabled=st.session_state.session_active):
-    if not st.session_state.enabled_notes:
+    if not selected_notes:
         st.sidebar.error("Select at least one note.")
     elif not cadence_types:
         st.sidebar.error("Select at least one cadence.")
@@ -130,9 +123,8 @@ if st.sidebar.button("🎯 Start Session", disabled=st.session_state.session_act
         st.session_state.rounds = []
         st.session_state.round_index = 0
         st.session_state.next_round_trigger = True
-        st.session_state.to_rerun = True
 
-# === App title ===
+# === Main title ===
 st.title("🎶 Pitch Recognition Trainer")
 
 # === Game logic ===
@@ -153,7 +145,7 @@ if st.session_state.session_active:
             st.session_state.session_active = False
             st.session_state.round_index = 0
             st.session_state.rounds = []
-            st.session_state.to_rerun = True
+
     else:
         round_num = st.session_state.round_index + 1
         st.subheader(f"🎧 Round {round_num} of {ROUNDS_PER_SESSION}")
@@ -162,31 +154,29 @@ if st.session_state.session_active:
             chosen_cadence = random.choice(cadence_types)
             chosen_tonality = random.choice(tonality)
             cadence_file = f"{AUDIO_DIR}/{chosen_cadence}_{chosen_tonality}.wav"
-            note = random.choice(st.session_state.enabled_notes)
+
+            note = random.choice(selected_notes)
             note_audio = note_to_wav(note)
 
             st.session_state.current_note = note
-            st.session_state.start_time = time.time()
+            st.session_state.submitted = None
 
-            with st.spinner(f"Playing cadence `{chosen_cadence}` in `{tonality}`..."):
-                play_sound(cadence_file)
+            play_wave_file(cadence_file)
 
             time.sleep(0.2)
+
             st.audio(note_audio, format="audio/wav")
+            st.session_state.start_time = time.time()
             st.session_state.next_round_trigger = False
-            st.session_state.to_rerun = True
 
         else:
             # Check if timeout expired
             elapsed = time.time() - st.session_state.start_time
             timeout = elapsed > 3
+            user_guess = st.session_state.submitted
 
-            guess = st.text_input("Which note did you hear?",
-                                  key=f"guess_{round_num}")
-            submitted = st.button("Submit Guess")
-
-            if timeout or submitted:
-                final_guess = guess.strip().upper() if guess and not timeout else "?"
+            if timeout or user_guess:
+                final_guess = user_guess if user_guess and not timeout else "?"
                 correct = final_guess == st.session_state.current_note
                 st.session_state.rounds.append({
                     "guess": final_guess,
@@ -195,17 +185,16 @@ if st.session_state.session_active:
                     "time": elapsed
                 })
 
-                feedback = "✅ Correct!" if correct else f"❌ Wrong! It was {st.session_state.current_note}" if final_guess != "?" else "⏱️ Timed out!"
-                st.write(feedback)
+                if final_guess == "?":
+                    st.warning("⏱️ Timed out!")
+                elif correct:
+                    st.success("✅ Correct!")
+                else:
+                    st.error(
+                        f"❌ Wrong! It was {st.session_state.current_note}")
 
                 st.session_state.round_index += 1
                 st.session_state.next_round_trigger = True
                 time.sleep(1.5)
-                st.session_state.to_rerun = True
 else:
     st.info("Click **Start Session** to begin 20 rounds of pitch guessing.")
-
-# === Final rerun if needed ===
-if st.session_state.get("to_rerun"):
-    st.session_state.to_rerun = False
-    # st.experimental_rerun()
