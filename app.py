@@ -10,6 +10,7 @@ import time
 import os
 import json
 import datetime
+import base64
 
 
 # === Constants ===
@@ -19,6 +20,7 @@ NOTE_NAMES = ['C4', 'C#4', 'D4', 'Eb4', 'E4',
               'F4', 'F#4', 'G4', 'Ab4', 'A4', 'Bb4', 'B4']
 AUDIO_DIR = 'audio'
 ROUNDS_PER_SESSION = 3
+TIME_TO_GUESS = 6
 SESSION_LOG = 'session_data.json'
 
 # === Tone generaton ===
@@ -48,11 +50,37 @@ def generate_tone(note_name, duration=DURATION, sample_rate=SAMPLE_RATE):
     return tone.astype(np.float32)
 
 
-def note_to_wav(note_name):
-    audio_data = generate_tone(note_name)
+def concat_and_play(cadence_file, note_name):
+
+    if not (os.path.exists(cadence_file)):
+        st.error(f"Missing audio file: {cadence_file}")
+
+    # Load cadence
+    cadence_audio, sr1 = sf.read(cadence_file)
+
+    # Generate note
+    note_audio = generate_tone(note_name)
+
+    # Reshape if needed (cadence might be stereo)
+    if len(cadence_audio.shape) == 2:  # Stereo
+        note_audio = np.column_stack([note_audio, note_audio])
+
+    # Concatenate
+    full_audio = np.concatenate([cadence_audio, note_audio])
+
+    # Export to buffer
     buffer = io.BytesIO()
-    sf.write(buffer, audio_data, SAMPLE_RATE, format='WAV')
-    return buffer.getvalue()
+    sf.write(buffer, full_audio, SAMPLE_RATE, format='WAV')
+
+    # Embed audio in HTML
+    st.markdown(
+        f"""
+        <audio autoplay>
+            <source src="data:audio/wav;base64,{base64.b64encode(buffer.getvalue()).decode()}" type="audio/wav">
+        </audio>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 # === Load/save sessions ===
@@ -66,14 +94,6 @@ def load_session_data():
 def save_session_data(data):
     with open(SESSION_LOG, 'w') as f:
         json.dump(data, f, indent=2)
-
-
-# === Play WAV file ===
-def play_wave_file(filename):
-    if os.path.exists(filename):
-        st.audio(filename, format="audio/wav")
-    else:
-        st.error(f"Missing audio file: {filename}")
 
 
 # === Init session state ===
@@ -151,28 +171,24 @@ if st.session_state.session_active:
         st.subheader(f"🎧 Round {round_num} of {ROUNDS_PER_SESSION}")
 
         if st.session_state.next_round_trigger:
+            st.session_state.submitted = None
+
             chosen_cadence = random.choice(cadence_types)
             chosen_tonality = random.choice(tonality)
             cadence_file = f"{AUDIO_DIR}/{chosen_cadence}_{chosen_tonality}.wav"
 
             note = random.choice(selected_notes)
-            note_audio = note_to_wav(note)
-
             st.session_state.current_note = note
-            st.session_state.submitted = None
+            concat_and_play(cadence_file, note)
+            time.sleep(0.1)
 
-            play_wave_file(cadence_file)
-
-            time.sleep(0.2)
-
-            st.audio(note_audio, format="audio/wav")
             st.session_state.start_time = time.time()
             st.session_state.next_round_trigger = False
 
         else:
             # Check if timeout expired
             elapsed = time.time() - st.session_state.start_time
-            timeout = elapsed > 3
+            timeout = elapsed > TIME_TO_GUESS
             user_guess = st.session_state.submitted
 
             if timeout or user_guess:
@@ -197,4 +213,5 @@ if st.session_state.session_active:
                 st.session_state.next_round_trigger = True
                 time.sleep(1.5)
 else:
-    st.info("Click **Start Session** to begin 20 rounds of pitch guessing.")
+    st.info(
+        f"Click **Start Session** to begin {ROUNDS_PER_SESSION} rounds of pitch guessing.")
