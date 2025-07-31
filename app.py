@@ -165,6 +165,7 @@ if st.session_state.session_active:
             st.session_state.session_active = False
             st.session_state.round_index = 0
             st.session_state.rounds = []
+            st.rerun()
 
     else:
         round_num = st.session_state.round_index + 1
@@ -180,7 +181,6 @@ if st.session_state.session_active:
             note = random.choice(selected_notes)
             st.session_state.current_note = note
             concat_and_play(cadence_file, note)
-            time.sleep(0.1)
 
             st.session_state.start_time = time.time()
             st.session_state.next_round_trigger = False
@@ -202,16 +202,20 @@ if st.session_state.session_active:
                 })
 
                 if final_guess == "?":
-                    st.warning("⏱️ Timed out!")
+                    st.warning(
+                        f"⏱️ Timed out! It was {st.session_state.current_note}")
                 elif correct:
-                    st.success("✅ Correct!")
+                    st.success(
+                        f"✅ Correct! It was {st.session_state.current_note}")
                 else:
                     st.error(
                         f"❌ Wrong! It was {st.session_state.current_note}")
+                time.sleep(1.2)
 
                 st.session_state.round_index += 1
                 st.session_state.next_round_trigger = True
-                time.sleep(1.5)
+                st.rerun()
+
 else:
     st.info(
-        f"Click **Start Session** to begin {ROUNDS_PER_SESSION} rounds of pitch guessing.")
+        f"Click **Start Session** to begin {ROUNDS_PER_SESSION} rounds of pitch guessing.\nYou have less than {TIME_TO_GUESS} seconds to guess")
